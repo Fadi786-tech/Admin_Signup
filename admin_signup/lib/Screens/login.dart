@@ -17,6 +17,7 @@ class Login extends StatefulWidget {
 }
 
 late int adminid;
+late String Adminemail;
 
 class _LoginState extends State<Login> {
   // @override
@@ -26,7 +27,6 @@ class _LoginState extends State<Login> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  late String email;
 
   Future<void> getAdminId() async {
     String url = '$apiurl/admin-id/${_emailController.text}';
@@ -66,6 +66,7 @@ class _LoginState extends State<Login> {
 
       if (response.statusCode == 200) {
         getAdminId();
+        Adminemail = _emailController.text;
         SharedPreferences pref = await SharedPreferences.getInstance();
         pref.setString('Email', _emailController.text.trim());
         pref.setString('Password', _passwordController.text);

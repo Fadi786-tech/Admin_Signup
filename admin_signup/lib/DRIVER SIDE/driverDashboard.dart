@@ -957,7 +957,6 @@
 //     );
 //   }
 // }
-
 import 'dart:async';
 import 'dart:convert';
 import 'package:admin_signup/Screens/MainDashboard.dart';
@@ -971,6 +970,32 @@ import 'package:admin_signup/DRIVER%20SIDE/driver_notification_screen.dart';
 import 'package:admin_signup/DRIVER%20SIDE/driver_profile.dart';
 import 'package:admin_signup/DRIVER%20SIDE/driver_login.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class TodayEventCount {
+  final int overspeeding;
+  final int hardbraking;
+  final int sharpturn;
+
+  TodayEventCount({
+    required this.overspeeding,
+    required this.hardbraking,
+    required this.sharpturn,
+  });
+
+  factory TodayEventCount.fromJson(Map<String, dynamic> json) {
+    return TodayEventCount(
+      // Convert string values to integers
+      overspeeding: int.tryParse(json['overspeeding'].toString()) ?? 0,
+      hardbraking: int.tryParse(json['hardbraking'].toString()) ?? 0,
+      sharpturn: int.tryParse(json['sharpturn'].toString()) ?? 0,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'TodayEventCount(overspeeding: $overspeeding, hardbraking: $hardbraking, sharpturn: $sharpturn)';
+  }
+}
 
 class ViolationMarker {
   final String eventType;
@@ -1052,6 +1077,7 @@ class _DriverdashboardState extends State<Driverdashboard> {
   StreamSubscription<GyroscopeEvent>? _gyroStream;
   StreamSubscription<AccelerometerEvent>? _accelStream;
   Timer? _dataSendTimer;
+  Timer? _Timer;
   Timer? _violationFetchTimer;
   String _errorMessage = "";
   bool isDriving = false;
@@ -1064,6 +1090,11 @@ class _DriverdashboardState extends State<Driverdashboard> {
   List<ViolationMarker> _violations = [];
   bool _showViolations = true;
   bool _showGeofences = true;
+  TodayEventCount? _todayEventCount;
+  Timer? _eventCountTimer;
+  LatLng? _previousPosition;
+  DateTime? _previousTimestamp;
+  Timer? _checkloginstateCountTimer;
 
   @override
   void initState() {
@@ -1071,6 +1102,64 @@ class _DriverdashboardState extends State<Driverdashboard> {
     drivervehicleid = widget.drivervehicleid;
     _initializeData();
     _startViolationUpdates();
+    fetchTodayEventCount();
+    // Start periodic timer
+    _eventCountTimer = Timer.periodic(Duration(seconds: 10), (timer) {
+      fetchTodayEventCount();
+    });
+
+    _callStartDrivingAPI();
+    toggleDriving();
+
+    // _checkloginstateCountTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+    //   if (login == true) {
+    //     toggleDriving();
+    //   } else {
+    //     stopDriving();
+    //   }
+    // });
+  }
+
+  @override
+  void dispose() {
+    // Cancel all timers and streams to prevent setState() after dispose
+    _violationFetchTimer?.cancel();
+    _dataSendTimer?.cancel();
+    _positionStream?.cancel();
+    _gyroStream?.cancel();
+    _accelStream?.cancel();
+    _eventCountTimer?.cancel();
+    //_checkloginstateCountTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> fetchTodayEventCount() async {
+    if (drivervehicleid == null) return;
+
+    try {
+      final response = await http
+          .get(Uri.parse("$driverapiurl/display-count/$drivervehicleid"));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        // Validate the data structure
+        if (data is Map<String, dynamic>) {
+          setState(() {
+            _todayEventCount = TodayEventCount.fromJson(data);
+          });
+        } else {
+          print("Invalid data format received");
+        }
+      } else {
+        print("Response body: ${response.body}");
+      }
+    } catch (e) {
+      print("Error fetching event count: $e");
+      setState(() {
+        _todayEventCount = null;
+      });
+    }
   }
 
   Future<void> _initializeData() async {
@@ -1083,10 +1172,12 @@ class _DriverdashboardState extends State<Driverdashboard> {
       }
 
       if (driverEmail.isEmpty) {
-        setState(() {
-          _errorMessage = "Driver email not found. Please log in again.";
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _errorMessage = "Driver email not found. Please log in again.";
+            _isLoading = false;
+          });
+        }
         return;
       }
 
@@ -1098,10 +1189,12 @@ class _DriverdashboardState extends State<Driverdashboard> {
       await fetchGeofences();
     } catch (e) {
       print("Error initializing data: $e");
-      setState(() {
-        _errorMessage = "Failed to initialize: $e";
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = "Failed to initialize: $e";
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -1190,9 +1283,11 @@ class _DriverdashboardState extends State<Driverdashboard> {
           }
         }
 
-        setState(() {
-          geofencePolygons = newPolygons;
-        });
+        if (mounted) {
+          setState(() {
+            geofencePolygons = newPolygons;
+          });
+        }
         print('Successfully updated ${geofencePolygons.length} geofences');
       } else {
         print('Failed to fetch geofences: ${response.statusCode}');
@@ -1210,18 +1305,24 @@ class _DriverdashboardState extends State<Driverdashboard> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        setState(() {
-          drivervehicleid = data['drivervehicleid'];
-        });
+        if (mounted) {
+          setState(() {
+            drivervehicleid = data['drivervehicleid'];
+          });
+        }
       } else {
-        setState(() {
-          _errorMessage = "Failed to fetch vehicle ID";
-        });
+        if (mounted) {
+          setState(() {
+            _errorMessage = "Failed to fetch vehicle ID";
+          });
+        }
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = "Error fetching vehicle ID: $e";
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = "Error fetching vehicle ID: $e";
+        });
+      }
     }
   }
 
@@ -1234,10 +1335,13 @@ class _DriverdashboardState extends State<Driverdashboard> {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        setState(() {
-          _violations =
-              data.map((json) => ViolationMarker.fromJson(json)).toList();
-        });
+        // Check if widget is still mounted before calling setState
+        if (mounted) {
+          setState(() {
+            _violations =
+                data.map((json) => ViolationMarker.fromJson(json)).toList();
+          });
+        }
       }
     } catch (e) {
       print("Error fetching violations: $e");
@@ -1257,11 +1361,13 @@ class _DriverdashboardState extends State<Driverdashboard> {
 
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        setState(() {
-          _errorMessage = 'Location services are disabled';
-          _currentPosition = defaultLocation;
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Location services are disabled';
+            _currentPosition = defaultLocation;
+            _isLoading = false;
+          });
+        }
         return;
       }
 
@@ -1269,51 +1375,63 @@ class _DriverdashboardState extends State<Driverdashboard> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          setState(() {
-            _errorMessage = 'Location permissions are denied';
-            _currentPosition = defaultLocation;
-            _isLoading = false;
-          });
+          if (mounted) {
+            setState(() {
+              _errorMessage = 'Location permissions are denied';
+              _currentPosition = defaultLocation;
+              _isLoading = false;
+            });
+          }
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        setState(() {
-          _errorMessage = 'Location permissions are permanently denied';
-          _currentPosition = defaultLocation;
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Location permissions are permanently denied';
+            _currentPosition = defaultLocation;
+            _isLoading = false;
+          });
+        }
         return;
       }
 
-      setState(() {
-        _locationPermissionGranted = true;
-      });
+      if (mounted) {
+        setState(() {
+          _locationPermissionGranted = true;
+        });
+      }
 
       try {
         Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 5),
+          timeLimit: Duration(seconds: 10),
         );
 
-        setState(() {
-          _currentPosition = LatLng(position.latitude, position.longitude);
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _currentPosition = LatLng(position.latitude, position.longitude);
+            _isLoading = false;
+          });
+        }
       } catch (e) {
+        if (mounted) {
+          setState(() {
+            _currentPosition = defaultLocation;
+            _errorMessage =
+                "Using default location - couldn't get current position";
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
-          _currentPosition = defaultLocation;
-          _errorMessage =
-              "Using default location - couldn't get current position";
+          _errorMessage = "Location error: $e";
           _isLoading = false;
         });
       }
-    } catch (e) {
-      setState(() {
-        _errorMessage = "Location error: $e";
-        _isLoading = false;
-      });
     }
   }
 
@@ -1323,71 +1441,143 @@ class _DriverdashboardState extends State<Driverdashboard> {
       return;
     }
 
-    setState(() {
-      isDriving = !isDriving;
-    });
+    // setState(() {
+    //   //isDriving = !isDriving;
+    // });
 
-    if (isDriving) {
-      startDriving();
-    } else {
-      stopDriving();
-    }
+    //if (isDriving) {
+    startDriving();
+    //} else {
+    //stopDriving();
+    //}
   }
 
   void startDriving() {
+    // Check login status before starting
+    if (!login) {
+      print("Cannot start driving - user not logged in");
+      return;
+    }
+
     setState(() {
       _route = [];
     });
 
-    _callStartDrivingAPI();
-
     _positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
+        distanceFilter: 1,
       ),
     ).listen((position) {
-      if (!_isSignificantMovement(position)) return;
+      // Add login check here too
+      if (!login) {
+        _positionStream?.cancel();
+        return;
+      }
 
       final newPosition = LatLng(position.latitude, position.longitude);
-      setState(() {
-        _currentPosition = newPosition;
-        _route.add(newPosition);
-        _speed = position.speed * 3.6;
-      });
+      final currentTime = DateTime.now();
+
+      double calculatedSpeed = 0.0;
+
+      if (_previousPosition != null && _previousTimestamp != null) {
+        final distance = Geolocator.distanceBetween(
+          _previousPosition!.latitude,
+          _previousPosition!.longitude,
+          newPosition.latitude,
+          newPosition.longitude,
+        );
+
+        final timeDiffSeconds =
+            currentTime.difference(_previousTimestamp!).inMilliseconds / 1000;
+
+        if (timeDiffSeconds > 0) {
+          calculatedSpeed = (distance / timeDiffSeconds) * 3.6; // m/s to km/h
+        }
+      }
+
+      _previousPosition = newPosition;
+      _previousTimestamp = currentTime;
+
+      if (mounted) {
+        setState(() {
+          _currentPosition = newPosition;
+          _route.add(newPosition);
+          _speed = calculatedSpeed;
+        });
+      }
 
       _mapController.move(newPosition, 16);
     }, onError: (e) {
       _showErrorSnackBar('Location error: $e');
-      stopDriving();
-      setState(() {
-        isDriving = false;
-      });
     });
 
     _gyroStream = gyroscopeEvents.listen((event) {
-      _gyroscope = [event.x, event.y, event.z];
+      if (mounted && login) {
+        _gyroscope = [event.x, event.y, event.z];
+      }
     });
 
     _accelStream = accelerometerEvents.listen((event) {
-      _accelerometer = [event.x, event.y, event.z];
+      if (mounted && login) {
+        _accelerometer = [event.x, event.y, event.z];
+      }
     });
 
-    _dataSendTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      sendLiveData();
-    });
+    // Start the data sending timer only if logged in
+    if (login) {
+      _dataSendTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        sendLiveData();
+      });
+    }
   }
 
-  bool _isSignificantMovement(Position newPosition) {
-    if (_currentPosition == null) return true;
-    double distance = Geolocator.distanceBetween(
-      _currentPosition!.latitude,
-      _currentPosition!.longitude,
-      newPosition.latitude,
-      newPosition.longitude,
-    );
-    return distance > 8.0;
+  Future<void> sendLiveData() async {
+    // Add login check at the beginning
+    if (!login) {
+      print("User logged out, stopping data transmission");
+      _dataSendTimer?.cancel();
+      return;
+    }
+
+    if (_currentPosition == null || drivervehicleid == null) return;
+
+    print("Login status: $login");
+
+    final data = {
+      "latitude": _currentPosition!.latitude,
+      "longitude": _currentPosition!.longitude,
+      "speed": _speed,
+      "gyroscope": {"x": _gyroscope[0], "y": _gyroscope[1], "z": _gyroscope[2]},
+      "accelerometer": {
+        "x": _accelerometer[0],
+        "y": _accelerometer[1],
+        "z": _accelerometer[2]
+      },
+      "drivervehicleid": drivervehicleid,
+    };
+
+    try {
+      await http.post(
+        Uri.parse("$vehicledriverurl/current-location"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(data),
+      );
+    } catch (e) {
+      print("Error sending data: $e");
+    }
   }
+
+  // bool _isSignificantMovement(Position newPosition) {
+  //   if (_currentPosition == null) return true;
+  //   double distance = Geolocator.distanceBetween(
+  //     _currentPosition!.latitude,
+  //     _currentPosition!.longitude,
+  //     newPosition.latitude,
+  //     newPosition.longitude,
+  //   );
+  //   return distance > 8.0;
+  // }
 
   Future<void> _callStartDrivingAPI() async {
     if (_currentPosition == null || drivervehicleid == null) return;
@@ -1449,35 +1639,6 @@ class _DriverdashboardState extends State<Driverdashboard> {
     }
   }
 
-  Future<void> sendLiveData() async {
-    if (_currentPosition == null || drivervehicleid == null || !isDriving)
-      return;
-
-    final data = {
-      "latitude": _currentPosition!.latitude,
-      "longitude": _currentPosition!.longitude,
-      "speed": _speed,
-      "gyroscope": {"x": _gyroscope[0], "y": _gyroscope[1], "z": _gyroscope[2]},
-      "accelerometer": {
-        "x": _accelerometer[0],
-        "y": _accelerometer[1],
-        "z": _accelerometer[2]
-      },
-      "drivervehicleid": drivervehicleid,
-      "isdriving": "true",
-    };
-
-    try {
-      await http.post(
-        Uri.parse("$vehicledriverurl/current-location"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(data),
-      );
-    } catch (e) {
-      print("Error sending data: $e");
-    }
-  }
-
   Future<void> sendFinalDrivingUpdate() async {
     if (_currentPosition == null || drivervehicleid == null) return;
 
@@ -1492,7 +1653,7 @@ class _DriverdashboardState extends State<Driverdashboard> {
         "z": _accelerometer[2]
       },
       "drivervehicleid": drivervehicleid,
-      "isdriving": "false",
+      //"isdriving": "false",
     };
 
     try {
@@ -1542,9 +1703,32 @@ class _DriverdashboardState extends State<Driverdashboard> {
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
+  }
+
+  void handleLogout() {
+    // Set login status to false
+    login = false;
+
+    // Cancel all timers and streams
+    _dataSendTimer?.cancel();
+    _positionStream?.cancel();
+    _gyroStream?.cancel();
+    _accelStream?.cancel();
+    _violationFetchTimer?.cancel();
+    _eventCountTimer?.cancel();
+    _checkloginstateCountTimer?.cancel();
+
+    // Send final driving update and call stop driving API
+    stopDriving();
+
+    // Navigate to login screen
+    Navigator.pushReplacement(
+        context, MaterialPageRoute(builder: (_) => const DriverLogin()));
   }
 
   @override
@@ -1590,9 +1774,8 @@ class _DriverdashboardState extends State<Driverdashboard> {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const DriverProfile()));
               } else if (value == 'Logout') {
-                stopDriving();
-                Navigator.pushReplacement(context,
-                    MaterialPageRoute(builder: (_) => const DriverLogin()));
+                // Use the new handleLogout method
+                handleLogout();
               }
             },
             itemBuilder: (context) => [
@@ -1638,7 +1821,7 @@ class _DriverdashboardState extends State<Driverdashboard> {
                 // Adjusted map container with fixed height
                 Container(
                   height: MediaQuery.of(context).size.height *
-                      0.5, // 50% of screen height
+                      0.4, // 50% of screen height
                   child: Stack(
                     children: [
                       FlutterMap(
@@ -1773,30 +1956,31 @@ class _DriverdashboardState extends State<Driverdashboard> {
                   ),
                 ),
                 // Violation counts section moved up
-                //if (_violations.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0, vertical: 8.0),
-                  child: Container(
-                    padding: const EdgeInsets.all(12.0),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(8.0),
-                      border: Border.all(color: Colors.red[200]!),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildViolationCount(
-                            'Overspeeding', Icons.speed, Colors.red),
-                        _buildViolationCount(
-                            'Hard Braking', Icons.warning, Colors.amber),
-                        _buildViolationCount(
-                            'Sharp Turns', Icons.turn_right, Colors.purple),
-                      ],
+                if (_todayEventCount != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 8.0),
+                    child: Container(
+                      padding: const EdgeInsets.all(12.0),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        borderRadius: BorderRadius.circular(8.0),
+                        border: Border.all(color: Colors.red[200]!),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildViolationCount('Overspeeding', Icons.speed,
+                              Colors.red, _todayEventCount!.overspeeding),
+                          _buildViolationCount('Hard Braking', Icons.warning,
+                              Colors.amber, _todayEventCount!.hardbraking),
+                          _buildViolationCount('Sharp Turns', Icons.turn_right,
+                              Colors.purple, _todayEventCount!.sharpturn),
+                        ],
+                      ),
                     ),
                   ),
-                ),
+
                 // Speed and driving controls section
                 Expanded(
                   child: Container(
@@ -1830,33 +2014,33 @@ class _DriverdashboardState extends State<Driverdashboard> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 20),
-                        Expanded(
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  isDriving ? Colors.red : Colors.black,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 40, vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(30),
-                              ),
-                            ),
-                            onPressed: toggleDriving,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(isDriving ? Icons.stop : Icons.play_arrow),
-                                const SizedBox(width: 8),
-                                Text(
-                                  isDriving ? "Stop Driving" : "Start Driving",
-                                  style: const TextStyle(fontSize: 16),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                        // const SizedBox(height: 20),
+                        // Expanded(
+                        //   child: ElevatedButton(
+                        //     style: ElevatedButton.styleFrom(
+                        //       backgroundColor:
+                        //           isDriving ? Colors.red : Colors.black,
+                        //       foregroundColor: Colors.white,
+                        //       padding: const EdgeInsets.symmetric(
+                        //           horizontal: 40, vertical: 12),
+                        //       shape: RoundedRectangleBorder(
+                        //         borderRadius: BorderRadius.circular(30),
+                        //       ),
+                        //     ),
+                        //     onPressed: toggleDriving,
+                        //     child: Row(
+                        //       mainAxisSize: MainAxisSize.min,
+                        //       children: [
+                        //         Icon(isDriving ? Icons.stop : Icons.play_arrow),
+                        //         const SizedBox(width: 8),
+                        //         Text(
+                        //           isDriving ? "Stop Driving" : "Start Driving",
+                        //           style: const TextStyle(fontSize: 16),
+                        //         ),
+                        //       ],
+                        //     ),
+                        //   ),
+                        // ),
                         if (drivervehicleid == null)
                           Padding(
                             padding: const EdgeInsets.only(top: 8.0),
@@ -1874,37 +2058,15 @@ class _DriverdashboardState extends State<Driverdashboard> {
     );
   }
 
-  Widget _buildViolationCount(String type, IconData icon, Color color) {
-    final count = _violations.where((v) {
-      switch (type) {
-        case 'OverSpeeding':
-          return v.eventType.toLowerCase().contains('OverSpeedi ng');
-        case 'HardBraking':
-          return v.eventType.toLowerCase().contains('HardBraking');
-        case 'SharpTurn':
-          return v.eventType.toLowerCase().contains('SharpTurn');
-        default:
-          return false;
-      }
-    }).length;
-
+  Widget _buildViolationCount(
+      String label, IconData icon, Color color, int count) {
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, color: color),
-        const SizedBox(height: 4),
-        Text(
-          '$count',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-            color: color,
-          ),
-        ),
-        Text(
-          type,
-          style: const TextStyle(fontSize: 12),
-        ),
+        SizedBox(height: 4),
+        Text(label, style: TextStyle(fontWeight: FontWeight.bold)),
+        SizedBox(height: 2),
+        Text(count.toString(), style: TextStyle(color: Colors.black87)),
       ],
     );
   }

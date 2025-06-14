@@ -19,6 +19,7 @@ class DriverLogin extends StatefulWidget {
 
 var driverEmail;
 var drivervehicleid;
+var login;
 
 class _DriverLoginState extends State<DriverLogin> {
   final _formKey = GlobalKey<FormState>();
@@ -96,6 +97,7 @@ class _DriverLoginState extends State<DriverLogin> {
       print('Response: ${response.body}'); // Debug log
 
       if (response.statusCode == 200) {
+        login = true;
         driverEmail = _emailController.text.trim();
         SharedPreferences pref = await SharedPreferences.getInstance();
         pref.setString('Email', _emailController.text.trim());

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:admin_signup/Demo/demoTracking.dart';
 import 'package:admin_signup/Screens/notification_screen.dart';
 import 'package:admin_signup/Track/TrackAll.dart';
 import 'package:admin_signup/speedlimitbound/bound_speedlimit.dart';
@@ -69,7 +70,7 @@ class _MaindashboardState extends State<Maindashboard> {
   @override
   void initState() {
     super.initState();
-    GetCompanyName(email).then((_) {
+    GetCompanyName(Adminemail).then((_) {
       setState(() {}); // Refresh the UI after fetching company name
     });
   }
@@ -132,7 +133,7 @@ class _MaindashboardState extends State<Maindashboard> {
           spacing: 10,
           children: [
             const SizedBox(
-              height: 25,
+              height: 5,
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -287,7 +288,7 @@ class _MaindashboardState extends State<Maindashboard> {
                           Row(
                             children: [
                               SizedBox(
-                                width: 5,
+                                width: 15,
                               ),
                               Text(
                                 'Assign Geofence',
@@ -393,6 +394,37 @@ class _MaindashboardState extends State<Maindashboard> {
             ),
             const SizedBox(
               height: 25,
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (context) {
+                      return DemoTrackingScreen();
+                    }));
+                  },
+                  child: SizedBox(
+                    width: 161,
+                    height: 197,
+                    child: Card(
+                      color: Colors.grey.shade400,
+                      shape: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(30.0)),
+                      child: const Column(
+                        children: [
+                          Image(image: AssetImage('assets/images/track.png')),
+                          Text(
+                            'Demo',
+                            style: TextStyle(fontSize: 20),
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

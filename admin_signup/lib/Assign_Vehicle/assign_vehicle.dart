@@ -59,23 +59,28 @@ class _AssignVehicleScreenState extends State<AssignVehicleScreen> {
   Future<void> assignVehicle() async {
     if (selectedEmployee == null ||
         selectedVehicle == null ||
-        startDate == null ||
-        endDate == null) {
-      _showErrorMessage('Please fill all fields');
+        startDate == null) {
+      _showErrorMessage('Please fill all required fields');
       return;
     }
 
     try {
+      final Map<String, dynamic> requestBody = {
+        'Name': selectedEmployee,
+        'LicensePlate': selectedVehicle,
+        'startDate': DateFormat('yyyy-MM-dd').format(startDate!),
+        'adminid': adminid,
+      };
+
+      // Only add endDate if it's selected
+      if (endDate != null) {
+        requestBody['endDate'] = DateFormat('yyyy-MM-dd').format(endDate!);
+      }
+
       final response = await http.post(
         Uri.parse('$vehicledriverurl/assignVehicle'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'Name': selectedEmployee, // Ensure correct key names
-          'LicensePlate': selectedVehicle,
-          'startDate': DateFormat('yyyy-MM-dd').format(startDate!),
-          'endDate': DateFormat('yyyy-MM-dd').format(endDate!),
-          'adminid': adminid,
-        }),
+        body: jsonEncode(requestBody),
       );
 
       if (response.statusCode == 200) {
@@ -181,7 +186,7 @@ class _AssignVehicleScreenState extends State<AssignVehicleScreen> {
               decoration: const InputDecoration(border: OutlineInputBorder()),
             ),
             const SizedBox(height: 16),
-            const Text('Start Date',
+            const Text('Start Date *',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
             TextFormField(
               readOnly: true,
@@ -196,19 +201,36 @@ class _AssignVehicleScreenState extends State<AssignVehicleScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('End Date',
+            const Text('End Date (Optional)',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-            TextFormField(
-              readOnly: true,
-              onTap: () => _selectDate(context, false),
-              controller: TextEditingController(
-                  text: endDate != null
-                      ? DateFormat('MM/dd/yyyy').format(endDate!)
-                      : ''),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                suffixIcon: Icon(Icons.calendar_today),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    readOnly: true,
+                    onTap: () => _selectDate(context, false),
+                    controller: TextEditingController(
+                        text: endDate != null
+                            ? DateFormat('MM/dd/yyyy').format(endDate!)
+                            : ''),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today),
+                      hintText: 'Select end date (optional)',
+                    ),
+                  ),
+                ),
+                if (endDate != null)
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        endDate = null;
+                      });
+                    },
+                    icon: const Icon(Icons.clear),
+                    tooltip: 'Clear end date',
+                  ),
+              ],
             ),
             const SizedBox(height: 24),
             SizedBox(

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:admin_signup/Screens/login.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -35,7 +37,7 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
     picture = pref.getString('picture'); // Image path or URL
     imageUrl = pref.getString('picture');
 
-// Ensure the URL is correctly formatted
+    // Ensure the URL is correctly formatted
     if (imageUrl != null && imageUrl.isNotEmpty) {
       if (!imageUrl.startsWith('http')) {
         imageUrl = '$vehicleapiurl$imageUrl'; // Prepend API URL
@@ -69,7 +71,7 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
     String vt = vehicleType.isEmpty ? vehicletype : vehicleType;
 
     var request = http.MultipartRequest(
-        'PUT', Uri.parse('$vehicleapiurl/update-vehicle/${adminid}'));
+        'PUT', Uri.parse('$vehicleapiurl/update-vehicle/$adminid'));
 
     request.headers['Content-Type'] = 'multipart/form-data';
 
@@ -77,13 +79,21 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
     request.fields['Model'] = m;
     request.fields['Year'] = y;
     request.fields['VehicleType'] = vt;
-    request.fields['Picture'] = picture;
-    // if (_image != null) {
-    //   request.files.add(await http.MultipartFile.fromPath('Picture', _image!.path));
-    // }
+
+    // Only send the old picture field if no new image is selected
+    if (_image == null) {
+      request.fields['Picture'] = picture ?? '';
+    }
+
+    // Add the new image file if selected - FIXED: Uncommented and corrected field name
+    if (_image != null) {
+      request.files.add(
+          await http.MultipartFile.fromPath('vehiclePicture', _image!.path));
+    }
 
     try {
-      print('$licenseplate,$m,$y,$vt,$picture');
+      print(
+          '$licenseplate,$m,$y,$vt,${_image != null ? 'New Image Selected' : picture}');
       var response = await request.send();
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -132,7 +142,6 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
                         labelText: 'Year',
                         hintText: year.toString(),
                         border: OutlineInputBorder())),
-
                 DropdownButtonFormField(
                   decoration: InputDecoration(
                       hintText: vehicletype.toString(),
@@ -146,32 +155,25 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
                     });
                   },
                 ),
-
                 const SizedBox(height: 10),
                 CircleAvatar(
                   radius: 50,
-                  backgroundImage: imageUrl != null && imageUrl.isNotEmpty
-                      ? NetworkImage(imageUrl) // Load image from server
-                      : null,
-                  child: imageUrl == null || imageUrl.isEmpty
-                      ? const Icon(Icons.car_rental,
-                          color: Colors.grey, size: 50)
-                      : null,
+                  backgroundImage: _image != null
+                      ? FileImage(_image!) // Show newly selected image
+                      : (imageUrl != null && imageUrl.isNotEmpty
+                          ? NetworkImage(
+                              imageUrl) // Show existing image from server
+                          : null),
+                  child:
+                      _image == null && (imageUrl == null || imageUrl.isEmpty)
+                          ? const Icon(Icons.car_rental,
+                              color: Colors.grey, size: 50)
+                          : null,
                 ),
-                //Show existing image or new selected image
-                // _image == null
-                //     ? (picture != null && picture.isNotEmpty
-                //     ? Image.network(picture, height: 100, errorBuilder: (context, error, stackTrace) {
-                //   return const Icon(Icons.error, color: Colors.red);
-                // })
-                //     : const Text("No Image Selected"))
-                //     : Image.file(_image!, height: 100),
-
                 TextButton(
                   onPressed: pickImage,
-                  child: const Text("Choose File"),
+                  child: Text(_image != null ? "Change Image" : "Choose File"),
                 ),
-
                 const SizedBox(height: 20),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
