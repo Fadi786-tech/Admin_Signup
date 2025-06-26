@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:admin_signup/DRIVER%20SIDE/driver_login.dart';
+import 'package:admin_signup/Track/Inspect_Driver.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_map/flutter_map.dart';
@@ -34,7 +35,7 @@ class SimulationViolation {
   final DateTime timestamp;
   final String description;
   final double value;
-  final String severity; // 'low', 'medium', 'high'
+  //final String severity; // 'low', 'medium', 'high'
 
   SimulationViolation({
     required this.type,
@@ -42,7 +43,7 @@ class SimulationViolation {
     required this.timestamp,
     required this.description,
     required this.value,
-    required this.severity,
+    //required this.severity,
   });
 }
 
@@ -85,8 +86,7 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
 
   // Speed and geofence limits for violation detection
   double _speedLimit = 60.0; // km/h
-  double _harshAccelerationThreshold = 15.0; // km/h change per second
-  double _harshBrakingThreshold = 15.0; // km/h change per second
+  double _hardBrakingThreshold = -1.5; // km/h change per second
   double _sharpTurnThreshold = 45.0; // degrees change
   bool _isInsideGeofence = true;
 
@@ -122,7 +122,7 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
       if (response.statusCode == 200) {
         print('Successfully loaded driver details');
         await fetchGeofences();
-        await fetchViolations();
+        //await fetchViolations();
       } else {
         print('Failed to load driver details: ${response.statusCode}');
       }
@@ -131,35 +131,35 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
     }
   }
 
-  Future<void> fetchViolations() async {
-    try {
-      if (dvid == null) return;
+  // Future<void> fetchViolations() async {
+  //   try {
+  //     if (dvid == null) return;
 
-      final response = await http.get(
-        Uri.parse('$vehicledriverurl/driver-violations/$dvid'),
-      );
+  //     final response = await http.get(
+  //       Uri.parse('$vehicledriverurl/driver-violations/$dvid'),
+  //     );
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        setState(() {
-          violations = data
-              .map((v) => {
-                    'eventid': v['eventid'],
-                    'eventtype': v['eventtype'],
-                    'latitude': v['latitude']?.toDouble(),
-                    'longitude': v['longitude']?.toDouble(),
-                    'timestamp': v['timestamp'],
-                    'violatedvalue': v['violatedvalue'],
-                  })
-              .toList();
-        });
-      } else {
-        print('Failed to fetch violations: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error fetching violations: $e');
-    }
-  }
+  //     if (response.statusCode == 200) {
+  //       final List<dynamic> data = json.decode(response.body);
+  //       setState(() {
+  //         violations = data
+  //             .map((v) => {
+  //                   'eventid': v['eventid'],
+  //                   'eventtype': v['eventtype'],
+  //                   'latitude': v['latitude']?.toDouble(),
+  //                   'longitude': v['longitude']?.toDouble(),
+  //                   'timestamp': v['timestamp'],
+  //                   'violatedvalue': v['violatedvalue'],
+  //                 })
+  //             .toList();
+  //       });
+  //     } else {
+  //       print('Failed to fetch violations: ${response.statusCode}');
+  //     }
+  //   } catch (e) {
+  //     print('Error fetching violations: $e');
+  //   }
+  // }
 
   bool _parseDrivingStatus(dynamic drivingValue) {
     print(
@@ -617,6 +617,19 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
     _mapController.move(driverLocation!, _mapZoom);
   }
 
+// Add this method to your _DriverDetailsScreenState class
+  double getDynamicGyroAngleThreshold(double speed) {
+    // For Sedan - dynamic threshold based on speed
+    if (speed <= 20) return 80;
+    if (speed > 20 && speed <= 40) return 60;
+    if (speed > 40 && speed <= 60) return 45;
+    if (speed > 60 && speed <= 80) return 35;
+    if (speed > 80 && speed <= 100) return 25;
+    if (speed > 100 && speed <= 120) return 20;
+    return 15;
+  }
+
+// Updated _checkViolations method - replace the sharp turn section
   void _checkViolations(RoutePoint point) {
     String severity = 'medium';
 
@@ -633,65 +646,53 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
         point.position,
         'Speed exceeded: ${point.speed.toStringAsFixed(1)} km/h (limit: $_speedLimit km/h)',
         point.speed - _speedLimit,
-        severity,
       );
     }
 
-    // Check harsh acceleration
-    final speedChange = point.speed - _previousSpeed;
-    if (speedChange > _harshAccelerationThreshold) {
-      severity = speedChange > _harshAccelerationThreshold * 2
-          ? 'high'
-          : speedChange > _harshAccelerationThreshold * 1.5
-              ? 'medium'
-              : 'low';
+    // Check hard braking using deceleration formula
+    double _hardBrakingThreshold = 1.5; // m/s²
+    double _simulationTimeInterval = 1.0; // seconds
+
+    double currentSpeedMs = point.speed * (1000.0 / 3600.0); // km/h to m/s
+    double previousSpeedMs = _previousSpeed * (1000.0 / 3600.0); // km/h to m/s
+
+    double deltaVelocity = currentSpeedMs - previousSpeedMs;
+    double deceleration = deltaVelocity / _simulationTimeInterval;
+
+    if (deceleration < -_hardBrakingThreshold) {
+      double decelerationMagnitude = deceleration.abs();
 
       _addSimulationViolation(
-        'Harsh Acceleration',
-        point.position,
-        'Sudden acceleration: ${speedChange.toStringAsFixed(1)} km/h increase',
-        speedChange,
-        severity,
-      );
+          'HardBraking',
+          point.position,
+          'Hard braking detected: ${decelerationMagnitude.toStringAsFixed(2)} m/s² deceleration',
+          decelerationMagnitude);
     }
 
-    // Check hard braking
-    if (speedChange < -_harshBrakingThreshold) {
-      severity = speedChange.abs() > _harshBrakingThreshold * 2
-          ? 'high'
-          : speedChange.abs() > _harshBrakingThreshold * 1.5
-              ? 'medium'
-              : 'low';
-
-      _addSimulationViolation(
-        'HardBraking',
-        point.position,
-        'Sudden braking: ${speedChange.abs().toStringAsFixed(1)} km/h decrease',
-        speedChange.abs(),
-        severity,
-      );
-    }
-
-    // Check sharp turn
+    // Check sharp turn with dynamic threshold based on speed
     double angleDifference = (point.angle - _previousAngle).abs();
     // Handle angle wrap-around (e.g., 359° to 1°)
     if (angleDifference > 180) {
       angleDifference = 360 - angleDifference;
     }
 
-    if (angleDifference > _sharpTurnThreshold) {
-      severity = angleDifference > _sharpTurnThreshold * 2
+    // Get dynamic threshold based on current speed
+    double dynamicSharpTurnThreshold =
+        getDynamicGyroAngleThreshold(point.speed);
+
+    if (angleDifference > dynamicSharpTurnThreshold) {
+      // Determine severity based on how much the angle exceeds the dynamic threshold
+      severity = angleDifference > dynamicSharpTurnThreshold * 2
           ? 'high'
-          : angleDifference > _sharpTurnThreshold * 1.5
+          : angleDifference > dynamicSharpTurnThreshold * 1.5
               ? 'medium'
               : 'low';
 
       _addSimulationViolation(
         'SharpTurn',
         point.position,
-        'Sharp turn detected: ${angleDifference.toStringAsFixed(1)}° change',
+        'Sharp turn detected: ${angleDifference.toStringAsFixed(1)}° change (threshold: ${dynamicSharpTurnThreshold.toStringAsFixed(1)}° at ${point.speed.toStringAsFixed(1)} km/h)',
         angleDifference,
-        severity,
       );
     }
 
@@ -710,7 +711,6 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
         point.position,
         'Vehicle outside designated area',
         0.0,
-        'high',
       );
     }
   }
@@ -738,8 +738,9 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
     return inside;
   }
 
-  void _addSimulationViolation(String type, LatLng position, String description,
-      double value, String severity) {
+  void _addSimulationViolation(
+      String type, LatLng position, String description, double value) {
+    //, String severity) {
     setState(() {
       _simulationViolations.add(
         SimulationViolation(
@@ -748,7 +749,7 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
           timestamp: DateTime.now(),
           description: description,
           value: value,
-          severity: severity,
+          //severity: severity,
         ),
       );
     });
@@ -766,10 +767,10 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
             Text('Type: ${violation.type}',
                 style: TextStyle(fontWeight: FontWeight.bold)),
             SizedBox(height: 8),
-            Text('Severity: ${violation.severity.toUpperCase()}',
-                style: TextStyle(
-                    color: _getViolationColor(violation.severity),
-                    fontWeight: FontWeight.bold)),
+            // Text('Severity: ${violation.severity.toUpperCase()}',
+            //     style: TextStyle(
+            //         color: _getViolationColor(violation.severity),
+            //         fontWeight: FontWeight.bold)),
             SizedBox(height: 8),
             Text('Description: ${violation.description}'),
             SizedBox(height: 8),
@@ -956,7 +957,7 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
             onPressed: () {
               if (!_isSimulationRunning) {
                 fetchDriverLocation();
-                fetchViolations();
+                //fetchViolations();
               }
             },
             tooltip: "Refresh Location",
@@ -1382,28 +1383,6 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
                 ],
               ),
             ),
-            // Weekly Report Link
-            // InkWell(
-            //   onTap: () {
-            //     Navigator.push(context, MaterialPageRoute(builder: (context) {
-            //       return WeeklyReportScreen(
-            //         driverVehicleId: dvid,
-            //       );
-            //     }));
-            //   },
-            //   child: Card(
-            //     elevation: 2,
-            //     margin: EdgeInsets.symmetric(vertical: 10),
-            //     child: ListTile(
-            //       leading: Icon(Icons.bar_chart, color: Colors.blue),
-            //       title: Text(
-            //         'Weekly Report',
-            //         style: TextStyle(fontWeight: FontWeight.bold),
-            //       ),
-            //       trailing: Icon(Icons.arrow_forward_ios),
-            //     ),
-            //   ),
-            // ),
           ],
         ),
       ),

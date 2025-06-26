@@ -4,6 +4,7 @@ import 'package:admin_signup/DRIVER%20SIDE/assigned_geofence.dart';
 import 'package:admin_signup/DRIVER%20SIDE/assigned_vehicle.dart';
 import 'package:admin_signup/DRIVER%20SIDE/driver_login.dart';
 import 'package:admin_signup/DRIVER%20SIDE/location_history_screen.dart';
+import 'package:admin_signup/DRIVER%20SIDE/speedlimit_list.dart';
 import 'package:admin_signup/DRIVER%20SIDE/vehicle_history.dart';
 import 'package:admin_signup/DRIVER%20SIDE/weekly_report.dart';
 import 'package:admin_signup/Screens/MainDashboard.dart';
@@ -20,6 +21,7 @@ class DriverProfile extends StatefulWidget {
 
 class _DriverProfileState extends State<DriverProfile> {
   String? imageUrl;
+  var adminid;
   var name, email, password, aemail;
   Future<void> _fetchDetails() async {
     try {
@@ -41,11 +43,10 @@ class _DriverProfileState extends State<DriverProfile> {
             name = data['data']['name'];
             aemail = data['data']['aemail'];
             imageUrl = data['data']['picture'];
-            print(imageUrl);
+            adminid = data['data']['adminid'];
             if (imageUrl != null && imageUrl!.isNotEmpty) {
               imageUrl = '$driverapiurl$imageUrl'; // Full server URL
             }
-            print(imageUrl);
           });
           // SharedPreferences pref= await SharedPreferences.getInstance();// as SharedPreferences;
           // pref.setString('name', name);
@@ -197,6 +198,23 @@ class _DriverProfileState extends State<DriverProfile> {
                     child: const ListTile(
                       title: Text(
                         'Vehicle History',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 20),
+                      ),
+                      trailing: Icon(Icons.arrow_forward),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(context,
+                          MaterialPageRoute(builder: (context) {
+                        return Speedlimit(Adminid: adminid);
+                      }));
+                    },
+                    child: const ListTile(
+                      title: Text(
+                        'Speedlimit Areas',
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 20),
                       ),

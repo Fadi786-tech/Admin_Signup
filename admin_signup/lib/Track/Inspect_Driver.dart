@@ -209,15 +209,18 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
         return;
       }
 
-      print('Fetching geofences for driver email: $driverEmail');
       final response = await http
           .get(Uri.parse('$vehicledriverurl/assigned-geofence/$driverEmail'));
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-
+        //print('Geofences data from API: $data');
         if (data.isEmpty) {
-          print('No geofences assigned to this driver');
+          print('No geofences assigned to this vehicle');
+          const SnackBar(
+            content: Text('No geofences assigned to this vehicle'),
+            duration: Duration(seconds: 2),
+          ).show(context);
           return;
         }
 
@@ -280,13 +283,13 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
         return;
       }
 
-      print('Fetching location for driver ID: $id');
+//      print('Fetching location for driver ID: $id');
       final response =
           await http.get(Uri.parse('$vehicledriverurl/live-location/$id'));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        print('Location data from API: $data');
+        //print('Location data from API: $data');
 
         if (data.containsKey('latitude') && data.containsKey('longitude')) {
           final newLocation = LatLng(
@@ -683,5 +686,11 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
         ),
       ),
     );
+  }
+}
+
+extension on SnackBar {
+  void show(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(this);
   }
 }

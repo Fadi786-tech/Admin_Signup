@@ -48,6 +48,7 @@ class _AssignedGeofencesScreenState extends State<AssignedGeofencesScreen> {
               DataColumn(label: Text("Start Date")),
               DataColumn(label: Text("End Date")),
               DataColumn(label: Text("Status")),
+              DataColumn(label: Text("Unassign Vehicle")),
             ],
             rows: geofences.map((geofence) {
               return DataRow(cells: [
@@ -57,6 +58,36 @@ class _AssignedGeofencesScreenState extends State<AssignedGeofencesScreen> {
                 DataCell(Text(geofence['start_date'] ?? "N/A")),
                 DataCell(Text(geofence['end_date'] ?? "N/A")),
                 DataCell(Text(geofence['status'] ?? "N/A")),
+                DataCell(ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black, // Background color
+                  ),
+                  onPressed: () async {
+                    final response =
+                        await http.post(Uri.parse('$apiUrl/unassign-geofence'),
+                            headers: {'Content-Type': 'application/json'},
+                            body: json.encode({
+                              'vehicleid': geofence['vehicleid'],
+                              'geoid': geofence['geoid'],
+                              'adminid': adminid,
+                            }));
+                    if (response.statusCode == 200) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                            content: Text('Geofence unassigned successfully')),
+                      );
+                      fetchData(); // Refresh the data
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to unassign Geofence')),
+                      );
+                    }
+                  },
+                  child: Text(
+                    "Unassign",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                )),
               ]);
             }).toList(),
           ),

@@ -36,8 +36,7 @@ class _AssignGeofenceScreenState extends State<AssignGeofenceScreen> {
   Future<void> assignVehicle() async {
     if (selectedGeofence == null ||
         selectedVehicle == null ||
-        startDate == null ||
-        endDate == null) {
+        startDate == null) {
       _showErrorMessage("Please fill in all fields before assigning.");
       return;
     }
@@ -46,9 +45,11 @@ class _AssignGeofenceScreenState extends State<AssignGeofenceScreen> {
       "geofence": selectedGeofence,
       "vehicle": selectedVehicle,
       "start_date": DateFormat('yyyy-MM-dd').format(startDate!),
-      "end_date": DateFormat('yyyy-MM-dd').format(endDate!),
       "allowed_outside": allowedOutside,
     };
+    if (endDate != null) {
+      requestBody["end_date"] = DateFormat('yyyy-MM-dd').format(endDate!);
+    }
 
     try {
       final response = await http.post(
@@ -215,19 +216,36 @@ class _AssignGeofenceScreenState extends State<AssignGeofenceScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text('End Date',
+            const Text('End Date (Optional)',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-            TextFormField(
-              readOnly: true,
-              onTap: () => _selectDate(context, false),
-              controller: TextEditingController(
-                  text: endDate != null
-                      ? DateFormat('MM/dd/yyyy').format(endDate!)
-                      : ''),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                suffixIcon: Icon(Icons.calendar_today),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    readOnly: true,
+                    onTap: () => _selectDate(context, false),
+                    controller: TextEditingController(
+                        text: endDate != null
+                            ? DateFormat('MM/dd/yyyy').format(endDate!)
+                            : ''),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today),
+                      hintText: 'Select end date (optional)',
+                    ),
+                  ),
+                ),
+                if (endDate != null)
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        endDate = null;
+                      });
+                    },
+                    icon: const Icon(Icons.clear),
+                    tooltip: 'Clear end date',
+                  ),
+              ],
             ),
             const SizedBox(height: 24),
             SizedBox(

@@ -1104,11 +1104,13 @@ class _DriverdashboardState extends State<Driverdashboard> {
     _startViolationUpdates();
     fetchTodayEventCount();
     // Start periodic timer
-    _eventCountTimer = Timer.periodic(Duration(seconds: 10), (timer) {
+    _eventCountTimer = Timer.periodic(Duration(seconds: 5), (timer) {
       fetchTodayEventCount();
     });
+    Timer(Duration(seconds: 10), () {
+      _callStartDrivingAPI();
+    });
 
-    _callStartDrivingAPI();
     toggleDriving();
 
     // _checkloginstateCountTimer = Timer.periodic(Duration(seconds: 1), (timer) {
@@ -1821,7 +1823,7 @@ class _DriverdashboardState extends State<Driverdashboard> {
                 // Adjusted map container with fixed height
                 Container(
                   height: MediaQuery.of(context).size.height *
-                      0.4, // 50% of screen height
+                      0.55, // 50% of screen height
                   child: Stack(
                     children: [
                       FlutterMap(
