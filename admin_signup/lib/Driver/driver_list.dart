@@ -117,6 +117,66 @@ class _DriverListScreenState extends State<DriverListScreen> {
     );
   }
 
+  void _showFireDriverDialog(
+      BuildContext context, var drivername, var licensenumber) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Do You Want to Fire this Driver?"),
+          content: Text(drivername),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text(
+                "Cancel",
+                style: TextStyle(color: Colors.black),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () {
+                _fireDriver(context, drivername, licensenumber);
+                setState(() {});
+              },
+              child: const Text("Fire Driver",
+                  style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _fireDriver(
+      BuildContext context, var drivername, var licenseno) async {
+    final url = Uri.parse('$driverapiurl/fire-driver');
+    final response = await http.put(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'adminid': adminid,
+        'LicenseNumber': licenseno,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("$drivername has been fired.")),
+      );
+      Navigator.push(context, MaterialPageRoute(builder: (context) {
+        return Maindashboard();
+      }));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to fire driver.")),
+      );
+    }
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -191,6 +251,11 @@ class _DriverListScreenState extends State<DriverListScreen> {
                               // Handle delete functionality
                               _showDeactivateDialog(context,
                                   filtereddriver[index]['licensenumber']);
+                            } else if (value == 'Fire Driver') {
+                              _showFireDriverDialog(
+                                  context,
+                                  filtereddriver[index]['name'],
+                                  filtereddriver[index]['licensenumber']);
                             }
                           },
                           itemBuilder: (BuildContext context) =>
@@ -207,6 +272,13 @@ class _DriverListScreenState extends State<DriverListScreen> {
                               child: ListTile(
                                 leading: Icon(Icons.delete),
                                 title: Text('Delete'),
+                              ),
+                            ),
+                            const PopupMenuItem<String>(
+                              value: 'Fire Driver',
+                              child: ListTile(
+                                leading: Icon(Icons.delete),
+                                title: Text('Fire Driver'),
                               ),
                             ),
                           ],

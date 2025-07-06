@@ -124,8 +124,6 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
     return false;
   }
 
-  // ... [keep all existing methods unchanged until the build method] ...
-
   IconData _getViolationIcon(String eventType) {
     switch (eventType.toLowerCase()) {
       case 'speeding':
@@ -276,6 +274,7 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
     });
   }
 
+  var speed;
   Future<void> fetchDriverLocation() async {
     try {
       if (id == null) {
@@ -298,7 +297,11 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
 
           // Parse the driving status - handle different possible data types
           bool isDriving = _parseDrivingStatus(data['isdriving']);
-
+          speed = data['speed'] is num
+              ? data['speed'].toDouble()
+              : (data['speed'] is String
+                  ? double.tryParse(data['speed'])
+                  : 0.0);
           // Parse timestamp and check if update is recent
           DateTime? lastUpdate;
           if (data.containsKey('lastUpdated')) {
@@ -659,6 +662,14 @@ class _DriverDetailsScreenState extends State<DriverDetailsScreen> {
                   ),
                 ],
               ),
+            ),
+            SizedBox(height: 20),
+            Row(
+              children: [
+                Text(
+                    'Current Speed: ${speed?.toStringAsFixed(2) ?? 'N/A'} km/h',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
             ),
             // Weekly Report Link
             InkWell(

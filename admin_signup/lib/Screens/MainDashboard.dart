@@ -4,7 +4,6 @@ import 'package:admin_signup/Screens/notification_screen.dart';
 import 'package:admin_signup/Track/TrackAll.dart';
 import 'package:admin_signup/speedlimitbound/bound_speedlimit.dart';
 import 'package:http/http.dart' as http;
-
 import '../Assign_Geofence/assign_geofence.dart';
 import '../Driver/driver_list.dart';
 import '../Screens/AdminProfile.dart';
@@ -24,7 +23,7 @@ class Maindashboard extends StatefulWidget {
   State<Maindashboard> createState() => _MaindashboardState();
 }
 
-String ip = '192.168.170.50';
+String ip = '192.168.10.7';
 String getBaseUrl() {
   if (kIsWeb) {
     // Web (Admin panel) ke liye localhost
@@ -392,40 +391,40 @@ class _MaindashboardState extends State<Maindashboard> {
                 ),
               ],
             ),
-            // const SizedBox(
-            //   height: 25,
-            // ),
-            // Row(
-            //   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            //   children: [
-            //     GestureDetector(
-            //       onTap: () {
-            //         Navigator.push(context,
-            //             MaterialPageRoute(builder: (context) {
-            //           return DemoTrackingScreen();
-            //         }));
-            //       },
-            //       child: SizedBox(
-            //         width: 161,
-            //         height: 197,
-            //         child: Card(
-            //           color: Colors.grey.shade400,
-            //           shape: OutlineInputBorder(
-            //               borderRadius: BorderRadius.circular(30.0)),
-            //           child: const Column(
-            //             children: [
-            //               Image(image: AssetImage('assets/images/track.png')),
-            //               Text(
-            //                 'Demo',
-            //                 style: TextStyle(fontSize: 20),
-            //               )
-            //             ],
-            //           ),
-            //         ),
-            //       ),
-            //     ),
-            //   ],
-            // ),
+            const SizedBox(
+              height: 25,
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (context) {
+                      return DemoTrackingScreen();
+                    }));
+                  },
+                  child: SizedBox(
+                    width: 161,
+                    height: 197,
+                    child: Card(
+                      color: Colors.grey.shade400,
+                      shape: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(30.0)),
+                      child: const Column(
+                        children: [
+                          Image(image: AssetImage('assets/images/track.png')),
+                          Text(
+                            'Demo',
+                            style: TextStyle(fontSize: 20),
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
