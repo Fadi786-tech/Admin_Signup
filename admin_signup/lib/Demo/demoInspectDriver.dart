@@ -5505,6 +5505,802 @@
 //   }
 // }
 
+// import 'package:admin_signup/Screens/MainDashboard.dart';
+// import 'package:flutter/material.dart';
+// import 'package:flutter_map/flutter_map.dart';
+// import 'package:latlong2/latlong.dart';
+// import 'package:http/http.dart' as http;
+// import 'dart:convert';
+// import 'dart:async';
+// import 'dart:math' as math;
+// import 'package:sensors_plus/sensors_plus.dart';
+// import 'package:geolocator/geolocator.dart';
+// import 'package:shared_preferences/shared_preferences.dart';
+
+// class DriverDetailsScreen extends StatefulWidget {
+//   @override
+//   DriverDetailsScreenState createState() => DriverDetailsScreenState();
+// }
+
+// class DriverDetailsScreenState extends State<DriverDetailsScreen> {
+//   final MapController _mapController = MapController();
+//   final List<LatLng> _routePoints = [];
+//   final List<double> _timeIntervals = [];
+//   List<Marker> _violationMarkers = [];
+//   List<Map<String, dynamic>> _violationsList =
+//       []; // Store violations with details
+//   List<Polygon> _geofencePolygons = [];
+//   final TextEditingController _timeIntervalController = TextEditingController();
+
+//   // Animation and driving state
+//   bool _isDriving = false;
+//   int _currentPointIndex = 0;
+//   LatLng _currentPosition = LatLng(33.6844, 73.0479); // Default: Rawalpindi
+//   Timer? _drivingTimer;
+//   Timer? _sensorTimer;
+
+//   // Sensor data
+//   late StreamSubscription<AccelerometerEvent> _accelerometerSubscription;
+//   late StreamSubscription<GyroscopeEvent> _gyroscopeSubscription;
+//   AccelerometerEvent? _currentAccelerometer;
+//   GyroscopeEvent? _currentGyroscope;
+
+//   // Speed and distance calculations
+//   double _currentSpeed = 0.0;
+//   double _totalDistance = 0.0;
+//   DateTime _lastPositionTime = DateTime.now();
+
+//   // Driver details
+//   int? dvid;
+//   int? id;
+//   String? picture;
+//   String? name;
+//   String? model;
+//   String? lp;
+//   String? driverEmail;
+
+//   void _initializeData() async {
+//     await fetchDriverDetails();
+//     await fetchViolations(); // Add this line to fetch violations on init
+//   }
+
+// // Update initState to use _initializeData
+//   @override
+//   void initState() {
+//     super.initState();
+//     _initializeSensors();
+//     _initializeData(); // Changed from fetchDriverDetails()
+//   }
+
+//   Future fetchDriverDetails() async {
+//     SharedPreferences pref = await SharedPreferences.getInstance();
+//     setState(() {
+//       dvid = pref.getInt('drivervehicleid');
+//       id = pref.getInt('id');
+//       picture = pref.getString('picture');
+//       name = pref.getString('name');
+//       model = pref.getString('model');
+//       lp = pref.getString('licenseno');
+//       driverEmail = pref.getString('email');
+//     });
+
+//     try {
+//       final response =
+//           await http.get(Uri.parse('$vehicledriverurl/inspect-driver/$id'));
+//       if (response.statusCode == 200) {
+//         print('Successfully loaded driver details');
+//         await fetchGeofences();
+//       } else {
+//         print('Failed to load driver details: ${response.statusCode}');
+//       }
+//     } catch (e) {
+//       print('Error fetching driver details: $e');
+//     }
+//   }
+
+//   Future fetchGeofences() async {
+//     try {
+//       if (driverEmail == null) return;
+
+//       final response = await http
+//           .get(Uri.parse('$vehicledriverurl/assigned-geofence/$driverEmail'));
+//       if (response.statusCode == 200) {
+//         final List data = json.decode(response.body);
+
+//         setState(() {
+//           _geofencePolygons = data.map((geofence) {
+//             List<LatLng> points = [];
+
+//             if (geofence['coordinates'] is List) {
+//               points = (geofence['coordinates'] as List)
+//                   .map((point) {
+//                     if (point is List && point.length >= 2) {
+//                       return LatLng(
+//                         point[0] is num ? point[0].toDouble() : 0.0,
+//                         point[1] is num ? point[1].toDouble() : 0.0,
+//                       );
+//                     }
+//                     return null;
+//                   })
+//                   .whereType<LatLng>()
+//                   .toList();
+//             }
+
+//             return Polygon(
+//               points: points,
+//               color: Colors.blue.withOpacity(0.3),
+//               borderColor: Colors.blue,
+//               borderStrokeWidth: 2,
+//             );
+//           }).toList();
+//         });
+//       }
+//     } catch (e) {
+//       print('Error fetching geofences: $e');
+//     }
+//   }
+
+//   Future<void> fetchViolations() async {
+//     try {
+//       if (dvid == null) return;
+
+//       final response = await http.get(
+//         Uri.parse('$vehicledriverurl/driver-violations/$dvid'),
+//       );
+
+//       if (response.statusCode == 200) {
+//         final List data = json.decode(response.body);
+
+//         setState(() {
+//           _violationMarkers = data.map((violation) {
+//             return Marker(
+//               width: 50.0,
+//               height: 50.0,
+//               point: LatLng(
+//                 violation['latitude']?.toDouble() ?? 0.0,
+//                 violation['longitude']?.toDouble() ?? 0.0,
+//               ),
+//               child: GestureDetector(
+//                 onTap: () => _showViolationDetails(violation),
+//                 child: Icon(
+//                   Icons.warning,
+//                   color: _getViolationColor(violation['eventtype']),
+//                   size: 30,
+//                 ),
+//               ),
+//             );
+//           }).toList();
+
+//           _violationsList = data.map((violation) {
+//             return {
+//               'type': violation['eventtype'],
+//               'position': LatLng(
+//                 violation['latitude']?.toDouble() ?? 0.0,
+//                 violation['longitude']?.toDouble() ?? 0.0,
+//               ),
+//               'time': DateTime.parse(violation['timestamp']),
+//               'speed': violation['violatedvalue']?.toDouble() ?? 0.0,
+//               'message': '${violation['eventtype']} violation detected',
+//             };
+//           }).toList();
+//         });
+//       } else {
+//         print('Failed to load violations: ${response.statusCode}');
+//       }
+//     } catch (e) {
+//       print('Error fetching violations: $e');
+//     }
+//   }
+
+// // Helper method to get color based on violation type
+//   Color _getViolationColor(String? eventType) {
+//     switch (eventType?.toLowerCase()) {
+//       case 'overspeeding':
+//         return Colors.red;
+//       case 'geofence violation':
+//         return Colors.orange;
+//       case 'driverfaultsharpturn':
+//         return Colors.yellow;
+//       case 'hardbraking':
+//         return Colors.purple;
+//       default:
+//         return Colors.red;
+//     }
+//   }
+
+//   void _initializeSensors() {
+//     // Initialize accelerometer
+//     _accelerometerSubscription =
+//         accelerometerEvents.listen((AccelerometerEvent event) {
+//       setState(() {
+//         _currentAccelerometer = event;
+//       });
+//     });
+
+//     // Initialize gyroscope
+//     _gyroscopeSubscription = gyroscopeEvents.listen((GyroscopeEvent event) {
+//       setState(() {
+//         _currentGyroscope = event;
+//       });
+//     });
+//   }
+
+//   // Haversine formula for distance calculation
+//   double _calculateDistance(LatLng point1, LatLng point2) {
+//     const double earthRadius = 6371000; // Earth's radius in meters
+
+//     double lat1Rad = point1.latitude * math.pi / 180;
+//     double lat2Rad = point2.latitude * math.pi / 180;
+//     double deltaLatRad = (point2.latitude - point1.latitude) * math.pi / 180;
+//     double deltaLngRad = (point2.longitude - point1.longitude) * math.pi / 180;
+
+//     double a = math.sin(deltaLatRad / 2) * math.sin(deltaLatRad / 2) +
+//         math.cos(lat1Rad) *
+//             math.cos(lat2Rad) *
+//             math.sin(deltaLngRad / 2) *
+//             math.sin(deltaLngRad / 2);
+
+//     double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+
+//     return earthRadius * c; // Distance in meters
+//   }
+
+//   // Calculate speed using V = d/t
+//   double _calculateSpeed(LatLng point1, LatLng point2, double timeInterval) {
+//     double distance = _calculateDistance(point1, point2);
+//     double speed = (distance / timeInterval) * 3.6; // Convert m/s to km/h
+//     return speed;
+//   }
+
+//   void _handleMapTap(TapPosition tapPosition, LatLng point) {
+//     showDialog(
+//       context: context,
+//       builder: (context) => AlertDialog(
+//         title: Text('Add Route Point'),
+//         content: Column(
+//           mainAxisSize: MainAxisSize.min,
+//           children: [
+//             Text('Latitude: ${point.latitude.toStringAsFixed(6)}'),
+//             Text('Longitude: ${point.longitude.toStringAsFixed(6)}'),
+//             TextField(
+//               controller: _timeIntervalController,
+//               decoration: InputDecoration(
+//                 labelText: 'Time Interval (seconds)',
+//               ),
+//               keyboardType: TextInputType.number,
+//             ),
+//           ],
+//         ),
+//         actions: [
+//           TextButton(
+//             onPressed: () => Navigator.pop(context),
+//             child: Text('Cancel'),
+//           ),
+//           TextButton(
+//             onPressed: () {
+//               if (_timeIntervalController.text.isNotEmpty) {
+//                 double timeInterval =
+//                     double.parse(_timeIntervalController.text);
+//                 setState(() {
+//                   _routePoints.add(point);
+//                   _timeIntervals.add(timeInterval);
+//                 });
+//                 _timeIntervalController.clear();
+//                 Navigator.pop(context);
+//               }
+//             },
+//             child: Text('Add'),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   void _clearRoute() {
+//     setState(() {
+//       _routePoints.clear();
+//       _timeIntervals.clear();
+//       _violationMarkers.clear();
+//       _currentPointIndex = 0;
+//     });
+//   }
+
+//   void _startDriving() {
+//     if (_routePoints.isEmpty) {
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         SnackBar(content: Text('Please add route points first')),
+//       );
+//       return;
+//     }
+
+//     if (dvid == null) {
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         SnackBar(content: Text('Driver vehicle ID not available')),
+//       );
+//       return;
+//     }
+
+//     setState(() {
+//       _isDriving = true;
+//       _currentPointIndex = 0;
+//       _currentPosition = _routePoints[0];
+//     });
+
+//     _mapController.move(_currentPosition, 15.0);
+//     _startRouteAnimation();
+//     _startSensorDataTransmission();
+//   }
+
+//   void _stopDriving() {
+//     setState(() {
+//       _isDriving = false;
+//     });
+
+//     _drivingTimer?.cancel();
+//     _sensorTimer?.cancel();
+
+//     // Show summary of violations after driving stops
+//     if (_violationsList.isNotEmpty) {
+//       WidgetsBinding.instance.addPostFrameCallback((_) {
+//         showDialog(
+//           context: context,
+//           builder: (context) => AlertDialog(
+//             title: Text('Driving Completed'),
+//             content: Column(
+//               mainAxisSize: MainAxisSize.min,
+//               children: [
+//                 Text('Total Violations: ${_violationsList.length}'),
+//                 SizedBox(height: 10),
+//                 ElevatedButton(
+//                   onPressed: () {
+//                     Navigator.pop(context);
+//                     _showViolationsList();
+//                   },
+//                   child: Text('View All Violations'),
+//                 ),
+//               ],
+//             ),
+//             actions: [
+//               TextButton(
+//                 onPressed: () => Navigator.pop(context),
+//                 child: Text('OK'),
+//               ),
+//             ],
+//           ),
+//         );
+//       });
+//     }
+//   }
+
+//   void _showViolationsList() {
+//     showDialog(
+//       context: context,
+//       builder: (context) => AlertDialog(
+//         title: Text('All Violations'),
+//         content: Container(
+//           width: double.maxFinite,
+//           child: ListView.builder(
+//             shrinkWrap: true,
+//             itemCount: _violationsList.length,
+//             itemBuilder: (context, index) {
+//               final violation = _violationsList[index];
+//               return ListTile(
+//                 leading: Icon(Icons.warning, color: Colors.red),
+//                 title: Text(violation['type']),
+//                 subtitle: Text(
+//                     'Speed: ${violation['speed'].toStringAsFixed(1)} km/h'),
+//                 onTap: () {
+//                   Navigator.pop(context);
+//                   _showViolationDetails(violation);
+//                 },
+//               );
+//             },
+//           ),
+//         ),
+//         actions: [
+//           TextButton(
+//             onPressed: () => Navigator.pop(context),
+//             child: Text('Close'),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   void _startRouteAnimation() {
+//     // Reset overspeeding detection for new segment
+//     _overspeedingDetectedInSegment = false;
+
+//     if (_currentPointIndex >= _routePoints.length - 1) {
+//       _stopDriving();
+//       return;
+//     }
+
+//     LatLng startPoint = _routePoints[_currentPointIndex];
+//     LatLng endPoint = _routePoints[_currentPointIndex + 1];
+//     double timeInterval = _timeIntervals[_currentPointIndex];
+
+//     // Calculate speed for this segment
+//     _currentSpeed = _calculateSpeed(startPoint, endPoint, timeInterval);
+
+//     // Animation parameters
+//     int animationSteps = (timeInterval * 10).round(); // 10 steps per second
+//     int stepDuration = (timeInterval * 1000 / animationSteps).round();
+
+//     int currentStep = 0;
+
+//     _drivingTimer =
+//         Timer.periodic(Duration(milliseconds: stepDuration), (timer) {
+//       if (currentStep >= animationSteps) {
+//         timer.cancel();
+//         _currentPointIndex++;
+//         _startRouteAnimation(); // Move to next segment
+//         return;
+//       }
+
+//       // Interpolate position
+//       double progress = currentStep / animationSteps;
+//       double lat = startPoint.latitude +
+//           (endPoint.latitude - startPoint.latitude) * progress;
+//       double lng = startPoint.longitude +
+//           (endPoint.longitude - startPoint.longitude) * progress;
+
+//       setState(() {
+//         _currentPosition = LatLng(lat, lng);
+//       });
+
+//       // Update map center
+//       _mapController.move(_currentPosition, _mapController.zoom);
+
+//       currentStep++;
+//     });
+//   }
+
+//   void _startSensorDataTransmission() {
+//     _sensorTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+//       if (!_isDriving) {
+//         timer.cancel();
+//         return;
+//       }
+
+//       _sendDataToAPI();
+//     });
+//   }
+
+//   Future<void> _sendDataToAPI() async {
+//     if (_currentAccelerometer == null ||
+//         _currentGyroscope == null ||
+//         dvid == null) {
+//       return;
+//     }
+//     print('${_currentPosition.longitude}, ${_currentPosition.latitude}');
+//     try {
+//       Map<String, dynamic> data = {
+//         'longitude': _currentPosition.longitude,
+//         'latitude': _currentPosition.latitude,
+//         'speed': _currentSpeed,
+//         'gyroscope': {
+//           'x': _currentGyroscope!.x,
+//           'y': _currentGyroscope!.y,
+//           'z': _currentGyroscope!.z,
+//         },
+//         'accelerometer': {
+//           'x': _currentAccelerometer!.x,
+//           'y': _currentAccelerometer!.y,
+//           'z': _currentAccelerometer!.z,
+//         },
+//         'drivervehicleid': dvid,
+//       };
+
+//       final response = await http.post(
+//         Uri.parse('$vehicledriverurl/current-location'),
+//         headers: {'Content-Type': 'application/json'},
+//         body: json.encode(data),
+//       );
+
+//       if (response.statusCode == 200) {
+//         var responseData = json.decode(response.body);
+//         _checkForViolations(responseData);
+//       }
+//     } catch (e) {
+//       print('Error sending data to API: $e');
+//     }
+//   }
+
+//   bool _overspeedingDetectedInSegment = false;
+
+// // Modify the _checkForViolations method
+//   void _checkForViolations(Map<String, dynamic> response) {
+//     String message = response['message'] ?? '';
+//     String violationType = '';
+
+//     if (message.contains('OverSpeeding')) {
+//       if (!_overspeedingDetectedInSegment) {
+//         violationType = 'OverSpeeding';
+//         _overspeedingDetectedInSegment = true;
+//       }
+//     } else if (message.contains('DriverFaultSharpTurn')) {
+//       violationType = 'Sharp Turn';
+//     } else if (message.contains('HardBraking')) {
+//       violationType = 'Hard Braking';
+//     } else if (message.contains('GeofenceViolation')) {
+//       violationType = 'Geofence Violation';
+//     }
+
+//     if (violationType.isNotEmpty) {
+//       final violation = {
+//         'type': violationType,
+//         'position': _currentPosition,
+//         'time': DateTime.now(),
+//         'speed': _currentSpeed,
+//         'message': message,
+//       };
+
+//       setState(() {
+//         _violationsList.add(violation);
+//         _violationMarkers.add(
+//           Marker(
+//             width: 50.0,
+//             height: 50.0,
+//             point: _currentPosition,
+//             child: GestureDetector(
+//               onTap: () => _showViolationDetails(violation),
+//               child: Container(
+//                 child: Icon(
+//                   Icons.warning,
+//                   color: Colors.red,
+//                   size: 30,
+//                 ),
+//               ),
+//             ),
+//           ),
+//         );
+//       });
+//     }
+//   }
+
+//   void _showViolationDetails(Map<String, dynamic> violation) {
+//     showDialog(
+//       context: context,
+//       builder: (context) => AlertDialog(
+//         title: Text('Violation Details'),
+//         content: SingleChildScrollView(
+//           child: Column(
+//             mainAxisSize: MainAxisSize.min,
+//             crossAxisAlignment: CrossAxisAlignment.start,
+//             children: [
+//               Text('Type: ${violation['type'] ?? violation['eventtype']}'),
+//               Text('Driver: ${violation['driver_name'] ?? 'Unknown'}'),
+//               if (violation['time'] != null)
+//                 Text('Time: ${violation['time'].toString()}'),
+//               if (violation['timestamp'] != null)
+//                 Text('Time: ${violation['timestamp']}'),
+//               if (violation['speed'] != null && violation['speed'] > 0)
+//                 Text('Speed: ${violation['speed'].toStringAsFixed(1)} km/h'),
+//               if (violation['violatedvalue'] != null)
+//                 Text('Value: ${violation['violatedvalue']}'),
+//               if (violation['position'] != null)
+//                 Text(
+//                     'Location: ${violation['position'].latitude.toStringAsFixed(6)}, '
+//                     '${violation['position'].longitude.toStringAsFixed(6)}'),
+//               if (violation['latitude'] != null &&
+//                   violation['longitude'] != null)
+//                 Text(
+//                     'Location: ${violation['latitude']}, ${violation['longitude']}'),
+//               SizedBox(height: 10),
+//               Text('Details:', style: TextStyle(fontWeight: FontWeight.bold)),
+//               Text(violation['message'] ?? 'Violation detected'),
+//             ],
+//           ),
+//         ),
+//         actions: [
+//           TextButton(
+//             onPressed: () => Navigator.pop(context),
+//             child: Text('OK'),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   void _addViolationMarker(String violation) {
+//     setState(() {
+//       _violationMarkers.add(
+//         Marker(
+//           width: 50.0,
+//           height: 50.0,
+//           point: _currentPosition,
+//           child: Container(
+//             child: Icon(
+//               Icons.warning,
+//               color: Colors.red,
+//               size: 30,
+//             ),
+//           ),
+//         ),
+//       );
+//     });
+
+//     // Show violation dialog
+//     showDialog(
+//       context: context,
+//       builder: (context) => AlertDialog(
+//         title: Text('Violation Detected!'),
+//         content: Text(violation),
+//         actions: [
+//           TextButton(
+//             onPressed: () => Navigator.pop(context),
+//             child: Text('OK'),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: Text('Driving Simulator'),
+//         backgroundColor: Colors.blue,
+//       ),
+//       body: Column(
+//         children: [
+//           // Status Panel
+//           Container(
+//             padding: EdgeInsets.all(8),
+//             color: Colors.blue[50],
+//             child: Row(
+//               mainAxisAlignment: MainAxisAlignment.spaceAround,
+//               children: [
+//                 Text('Points: ${_routePoints.length}'),
+//                 Text('Speed: ${_currentSpeed.toStringAsFixed(1)} km/h'),
+//                 Text('Status: ${_isDriving ? "Driving" : "Stopped"}'),
+//               ],
+//             ),
+//           ),
+//           // Sensor Data Panel
+//           Container(
+//             padding: EdgeInsets.all(8),
+//             color: Colors.orange[50],
+//             child: Column(
+//               children: [
+//                 Text('Real-time Sensor Data:'),
+//                 if (_currentAccelerometer != null)
+//                   Text(
+//                       'Accelerometer: X=${_currentAccelerometer!.x.toStringAsFixed(2)}, Y=${_currentAccelerometer!.y.toStringAsFixed(2)}, Z=${_currentAccelerometer!.z.toStringAsFixed(2)}'),
+//                 if (_currentGyroscope != null)
+//                   Text(
+//                       'Gyroscope: X=${_currentGyroscope!.x.toStringAsFixed(2)}, Y=${_currentGyroscope!.y.toStringAsFixed(2)}, Z=${_currentGyroscope!.z.toStringAsFixed(2)}'),
+//               ],
+//             ),
+//           ),
+//           // Control buttons
+//           Container(
+//             padding: EdgeInsets.all(8),
+//             child: Row(
+//               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+//               children: [
+//                 ElevatedButton(
+//                   onPressed: _isDriving ? null : _startDriving,
+//                   child: Text('Start Driving'),
+//                   style: ElevatedButton.styleFrom(
+//                     backgroundColor: Colors.green,
+//                   ),
+//                 ),
+//                 ElevatedButton(
+//                   onPressed: _isDriving ? _stopDriving : null,
+//                   child: Text('Stop Driving'),
+//                   style: ElevatedButton.styleFrom(
+//                     backgroundColor: Colors.red,
+//                   ),
+//                 ),
+//                 ElevatedButton(
+//                   onPressed: _clearRoute,
+//                   child: Text('Clear Route'),
+//                 ),
+//               ],
+//             ),
+//           ),
+//           // Map
+//           Expanded(
+//             child: FlutterMap(
+//               mapController: _mapController,
+//               options: MapOptions(
+//                 center: _currentPosition,
+//                 zoom: 15.0,
+//                 onTap: _handleMapTap,
+//               ),
+//               children: [
+//                 TileLayer(
+//                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+//                   //userAgentPackageName: 'com.example.driving_simulator',
+//                 ),
+//                 // Geofence polygons
+//                 PolygonLayer(
+//                   polygons: _geofencePolygons,
+//                 ),
+//                 // Route polyline
+//                 if (_routePoints.isNotEmpty)
+//                   PolylineLayer(
+//                     polylines: [
+//                       Polyline(
+//                         points: _routePoints,
+//                         strokeWidth: 4.0,
+//                         color: Colors.blue,
+//                       ),
+//                     ],
+//                   ),
+//                 // Route points markers
+//                 MarkerLayer(
+//                   markers: _routePoints.asMap().entries.map((entry) {
+//                     int index = entry.key;
+//                     LatLng point = entry.value;
+//                     return Marker(
+//                       width: 30.0,
+//                       height: 30.0,
+//                       point: point,
+//                       child: Container(
+//                         decoration: BoxDecoration(
+//                           color: Colors.blue,
+//                           shape: BoxShape.circle,
+//                         ),
+//                         child: Center(
+//                           child: Text(
+//                             '${index + 1}',
+//                             style: TextStyle(
+//                               color: Colors.white,
+//                               fontSize: 12,
+//                               fontWeight: FontWeight.bold,
+//                             ),
+//                           ),
+//                         ),
+//                       ),
+//                     );
+//                   }).toList(),
+//                 ),
+//                 // Current position marker (car)
+//                 MarkerLayer(
+//                   markers: [
+//                     Marker(
+//                       width: 40.0,
+//                       height: 40.0,
+//                       point: _currentPosition,
+//                       child: Container(
+//                         child: Icon(
+//                           Icons.directions_car,
+//                           color: _isDriving ? Colors.green : Colors.grey,
+//                           size: 30,
+//                         ),
+//                       ),
+//                     ),
+//                   ],
+//                 ),
+//                 // Violation markers
+//                 MarkerLayer(
+//                   markers: [
+//                     ..._violationMarkers,
+//                   ],
+//                 ),
+//               ],
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   @override
+//   void dispose() {
+//     _drivingTimer?.cancel();
+//     _sensorTimer?.cancel();
+//     _accelerometerSubscription.cancel();
+//     _gyroscopeSubscription.cancel();
+//     _timeIntervalController.dispose();
+//     super.dispose();
+//   }
+// }
+
 import 'package:admin_signup/Screens/MainDashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -5920,14 +6716,22 @@ class DriverDetailsScreenState extends State<DriverDetailsScreen> {
     LatLng endPoint = _routePoints[_currentPointIndex + 1];
     double timeInterval = _timeIntervals[_currentPointIndex];
 
-    // Calculate speed for this segment
-    _currentSpeed = _calculateSpeed(startPoint, endPoint, timeInterval);
+    // Calculate distance for this segment
+    double segmentDistance = _calculateDistance(startPoint, endPoint);
+
+    // Calculate target speed for this segment (m/s)
+    double targetSpeed = segmentDistance / timeInterval;
+
+    // Convert to km/h for display
+    double targetSpeedKmh = targetSpeed * 3.6;
 
     // Animation parameters
     int animationSteps = (timeInterval * 10).round(); // 10 steps per second
     int stepDuration = (timeInterval * 1000 / animationSteps).round();
 
     int currentStep = 0;
+    double lastLat = startPoint.latitude;
+    double lastLng = startPoint.longitude;
 
     _drivingTimer =
         Timer.periodic(Duration(milliseconds: stepDuration), (timer) {
@@ -5938,12 +6742,29 @@ class DriverDetailsScreenState extends State<DriverDetailsScreen> {
         return;
       }
 
-      // Interpolate position
+      // Calculate progress with easing for more realistic movement
       double progress = currentStep / animationSteps;
+
+      // Apply easing function for smoother acceleration/deceleration
+      double easedProgress = _easeInOutCubic(progress);
+
+      // Interpolate position
       double lat = startPoint.latitude +
-          (endPoint.latitude - startPoint.latitude) * progress;
+          (endPoint.latitude - startPoint.latitude) * easedProgress;
       double lng = startPoint.longitude +
-          (endPoint.longitude - startPoint.longitude) * progress;
+          (endPoint.longitude - startPoint.longitude) * easedProgress;
+
+      // Calculate distance moved in this step
+      double stepDistance = _calculateDistance(
+        LatLng(lastLat, lastLng),
+        LatLng(lat, lng),
+      );
+
+      // Calculate actual speed in km/h
+      double actualSpeed = (stepDistance / (stepDuration / 1000)) * 3.6;
+
+      // Smooth speed transition
+      _currentSpeed = _currentSpeed + (actualSpeed - _currentSpeed) * 0.3;
 
       setState(() {
         _currentPosition = LatLng(lat, lng);
@@ -5952,8 +6773,17 @@ class DriverDetailsScreenState extends State<DriverDetailsScreen> {
       // Update map center
       _mapController.move(_currentPosition, _mapController.zoom);
 
+      // Store last position for next distance calculation
+      lastLat = lat;
+      lastLng = lng;
+
       currentStep++;
     });
+  }
+
+// Easing function for smooth acceleration/deceleration
+  double _easeInOutCubic(double t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - math.pow(-2 * t + 2, 3) / 2;
   }
 
   void _startSensorDataTransmission() {
